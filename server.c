@@ -172,15 +172,22 @@ void handle_client(int sock) {
         int uh[12], dh[12];
         int uc = 0, dc = 0;
         uh[uc++] = draw_card();
+        uh[uc++] = draw_card();
         dh[dc++] = draw_card();
         dh[dc++] = draw_card();
 
-        int user_sum = card_value(uh[0]);
+        int user_sum = card_value(uh[0]) + card_value(uh[1]);
         int dealer_sum = card_value(dh[0]);
-        int hidden_card = dh[1];        fprintf(f, "your: "); print_hand(f, uh, uc, 0);
-        fprintf(f, " (total: %d)\n", user_sum);
+        int hidden_card = dh[1];
+
+        fprintf(f, "--------------------------");
+
         fprintf(f, "dealer: "); print_hand(f, dh, 1, 0);
         fprintf(f, ", hidden\n");
+
+        fprintf(f, "your: "); print_hand(f, uh, uc, 0);
+        fprintf(f, " (total: %d)\n", user_sum);
+        
         fflush(f);
 
         // player turn
@@ -191,9 +198,12 @@ void handle_client(int sock) {
                 int c = draw_card();
                 uh[uc++] = c;
                 user_sum += card_value(c);
+
+                fprintf(f, "--------------------------");
                 fprintf(f, "your: "); print_hand(f, uh, uc, 0);
                 fprintf(f, " (total: %d)\n", user_sum);
                 fflush(f);
+
                 if (user_sum >= 21) break;
             } else {
                 break;
