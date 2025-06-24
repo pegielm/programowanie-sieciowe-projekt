@@ -10,10 +10,10 @@ EXECUTABLE = server client
 all: $(EXECUTABLE)
 
 server: server.o
-	$(CC) $(LDFLAGS) -o $@ $^ $(OPENSSL_LIBS)
+	$(CC) $(LDFLAGS) -o $@ $^
 
 client: client.o
-	$(CC) $(LDFLAGS) -o $@ $^
+	$(CC) $(LDFLAGS) -o $@ $^ $(OPENSSL_LIBS)
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@

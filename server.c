@@ -8,7 +8,6 @@
 #include <arpa/inet.h>
 #include <signal.h>
 #include <time.h>
-#include <openssl/sha.h>
 #include <string.h>
 
 #define ANSI_BOLD     "\033[1m"
@@ -62,16 +61,6 @@ int card_value(int c) {
 
 void card_str(int c, char *buf) {
     sprintf(buf, "%s%s", ranks[c % 13], suits[c / 13]);
-}
-
-void hash_password(const char *input, char *output_hex) {
-    unsigned char hash[SHA256_DIGEST_LENGTH];
-    SHA256((const unsigned char*)input, strlen(input), hash);
-
-    for (int i = 0; i < SHA256_DIGEST_LENGTH; ++i) {
-        sprintf(output_hex + (i * 2), "%02x", hash[i]);
-    }
-    output_hex[64] = '\0';
 }
 
 int load_user(const char *u, const char *p, user_t *out) {
@@ -135,7 +124,6 @@ void handle_client(int sock) {
     FILE *f = fdopen(sock, "r+");
     char buf[64];
     char passbuf[256];
-    char hashbuf[65];
     user_t u;
 
     // login or register
@@ -147,14 +135,15 @@ void handle_client(int sock) {
         fprintf(f, "user:\n"); fflush(f);
         fgets(buf, sizeof(buf), f);
         buf[strcspn(buf, "\n")] = '\0';
-        strcpy(u.user, buf);
+        strncpy(u.user, buf, sizeof(u.user));
+        u.user[sizeof(u.user)-1] = '\0';
 
         fprintf(f, "pass:\n"); fflush(f);
         fgets(passbuf, sizeof(passbuf), f);
         passbuf[strcspn(passbuf, "\n")] = '\0';
 
-        hash_password(passbuf, hashbuf);
-        strcpy(u.pass, hashbuf);
+        strncpy(u.pass, passbuf, sizeof(u.pass));
+        u.pass[sizeof(u.pass)-1] = '\0';
 
         u.tokens = 1000;
         u.score = 0;
@@ -166,15 +155,14 @@ void handle_client(int sock) {
             fprintf(f, "user:\n"); fflush(f);
             fgets(buf, sizeof(buf), f);
             buf[strcspn(buf, "\n")] = '\0';
-            strcpy(u.user, buf);
+            strncpy(u.user, buf, sizeof(u.user));
+            u.user[sizeof(u.user)-1] = '\0';
 
             fprintf(f, "pass:\n"); fflush(f);
             fgets(passbuf, sizeof(passbuf), f);
             passbuf[strcspn(passbuf, "\n")] = '\0';
 
-            hash_password(passbuf, hashbuf);
-
-            ok = load_user(u.user, hashbuf, &u);
+            ok = load_user(u.user, passbuf, &u);
 
             if (!ok) {
                 fprintf(f, "invalid\n"); fflush(f);
