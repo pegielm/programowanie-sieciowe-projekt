@@ -8,6 +8,8 @@
 #include <arpa/inet.h>
 #include <signal.h>
 #include <time.h>
+#include <openssl/sha.h>
+#include <string.h>
 
 #define ANSI_BOLD     "\033[1m"
 #define ANSI_RED      "\033[31m"
@@ -21,7 +23,7 @@ int next_card;
 
 typedef struct {
     char user[32];
-    char pass[32];
+    char pass[65];
     int tokens;
     int score;
 } user_t;
@@ -62,20 +64,29 @@ void card_str(int c, char *buf) {
     sprintf(buf, "%s%s", ranks[c % 13], suits[c / 13]);
 }
 
+void hash_password(const char *input, char *output_hex) {
+    unsigned char hash[SHA256_DIGEST_LENGTH];
+    SHA256((const unsigned char*)input, strlen(input), hash);
+
+    for (int i = 0; i < SHA256_DIGEST_LENGTH; ++i) {
+        sprintf(output_hex + (i * 2), "%02x", hash[i]);
+    }
+    output_hex[64] = '\0';
+}
+
 int load_user(const char *u, const char *p, user_t *out) {
-    FILE *f = fopen("users.txt", "r+");
+    FILE *f = fopen("users.txt", "r");
     if (!f) return 0;
-    char line[128];
-    while (fgets(line, sizeof(line), f)) {
-        user_t tmp;
-        if (sscanf(line, "%31s %31s %d %d", tmp.user, tmp.pass, &tmp.tokens, &tmp.score) == 4) {
-            if (!strcmp(tmp.user, u) && !strcmp(tmp.pass, p)) {
-                *out = tmp;
-                fclose(f);
-                return 1;
-            }
+
+    user_t tmp;
+    while (fscanf(f, "%31s %64s %d %d", tmp.user, tmp.pass, &tmp.tokens, &tmp.score) == 4) {
+        if (strcmp(tmp.user, u) == 0 && strcmp(tmp.pass, p) == 0) {
+            *out = tmp;
+            fclose(f);
+            return 1;
         }
     }
+
     fclose(f);
     return 0;
 }
@@ -87,8 +98,8 @@ int save_user(const user_t *u) {
 
     if (in) {
         user_t tmp;
-        while (fscanf(in, "%31s %31s %d %d", tmp.user, tmp.pass, &tmp.tokens, &tmp.score) == 4) {
-            if (!strcmp(tmp.user, u->user)) {
+        while (fscanf(in, "%31s %64s %d %d", tmp.user, tmp.pass, &tmp.tokens, &tmp.score) == 4) {
+            if (strcmp(tmp.user, u->user) == 0) {
                 fprintf(out, "%s %s %d %d\n", u->user, u->pass, u->tokens, u->score);
                 found = 1;
             } else {
@@ -123,6 +134,8 @@ void print_hand(FILE *f, int *hand, int count, int hide_last) {
 void handle_client(int sock) {
     FILE *f = fdopen(sock, "r+");
     char buf[64];
+    char passbuf[256];
+    char hashbuf[65];
     user_t u;
 
     // login or register
@@ -137,9 +150,11 @@ void handle_client(int sock) {
         strcpy(u.user, buf);
 
         fprintf(f, "pass:\n"); fflush(f);
-        fgets(buf, sizeof(buf), f);
-        buf[strcspn(buf, "\n")] = '\0';
-        strcpy(u.pass, buf);
+        fgets(passbuf, sizeof(passbuf), f);
+        passbuf[strcspn(passbuf, "\n")] = '\0';
+
+        hash_password(passbuf, hashbuf);
+        strcpy(u.pass, hashbuf);
 
         u.tokens = 1000;
         u.score = 0;
@@ -154,11 +169,13 @@ void handle_client(int sock) {
             strcpy(u.user, buf);
 
             fprintf(f, "pass:\n"); fflush(f);
-            fgets(buf, sizeof(buf), f);
-            buf[strcspn(buf, "\n")] = '\0';
-            strcpy(u.pass, buf);
+            fgets(passbuf, sizeof(passbuf), f);
+            passbuf[strcspn(passbuf, "\n")] = '\0';
 
-            ok = load_user(u.user, u.pass, &u);
+            hash_password(passbuf, hashbuf);
+
+            ok = load_user(u.user, hashbuf, &u);
+
             if (!ok) {
                 fprintf(f, "invalid\n"); fflush(f);
             }
