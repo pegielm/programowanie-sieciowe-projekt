@@ -9,6 +9,11 @@
 #include <signal.h>
 #include <time.h>
 
+#define ANSI_BOLD     "\033[1m"
+#define ANSI_RED      "\033[31m"
+#define ANSI_WHITE    "\033[37m"
+#define ANSI_RESET    "\033[0m"
+
 const char *ranks[] = { "A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K" };
 const char *suits[] = { "♥", "♦", "♣", "♠" };
 int deck[52];
@@ -20,6 +25,13 @@ typedef struct {
     int tokens;
     int score;
 } user_t;
+
+void clear_client_terminal(FILE *f) {
+    if (f == NULL) return;
+
+    fprintf(f, "\033[2J\033[H");
+    fflush(f);
+}
 
 void init_deck() {
     for (int i = 0; i < 52; i++) {
@@ -153,6 +165,7 @@ void handle_client(int sock) {
         }
     }
 
+    clear_client_terminal(f);
     fprintf(f, "welcome %s tokens:%d score:%d\n", u.user, u.tokens, u.score);
     fflush(f);
 
@@ -180,14 +193,16 @@ void handle_client(int sock) {
         int dealer_sum = card_value(dh[0]);
         int hidden_card = dh[1];
 
-        fprintf(f, "--------------------------");
+        clear_client_terminal(f);
 
-        fprintf(f, "dealer: "); print_hand(f, dh, 1, 0);
+        fprintf(f, ANSI_BOLD ANSI_RED "dealer:" ANSI_RESET " ");
+        print_hand(f, dh, 1, 0);
         fprintf(f, ", hidden\n");
 
-        fprintf(f, "your: "); print_hand(f, uh, uc, 0);
+        fprintf(f, ANSI_BOLD ANSI_WHITE "your:" ANSI_RESET " ");
+        print_hand(f, uh, uc, 0);
         fprintf(f, " (total: %d)\n", user_sum);
-        
+
         fflush(f);
 
         // player turn
@@ -199,9 +214,12 @@ void handle_client(int sock) {
                 uh[uc++] = c;
                 user_sum += card_value(c);
 
-                fprintf(f, "--------------------------");
-                fprintf(f, "your: "); print_hand(f, uh, uc, 0);
-                fprintf(f, " (total: %d)\n", user_sum);
+                fprintf(f, "---------------------------\n");
+                
+                fprintf(f, ANSI_BOLD ANSI_WHITE "your:" ANSI_RESET " ");
+                print_hand(f, uh, uc, 0);
+                fprintf(f, ANSI_BOLD ANSI_WHITE " (total: %d)\n" ANSI_RESET, user_sum);
+
                 fflush(f);
 
                 if (user_sum >= 21) break;
@@ -218,7 +236,8 @@ void handle_client(int sock) {
             dealer_total += card_value(c);
         }
 
-        fprintf(f, "dealer: "); print_hand(f, dh, dc, 0);
+        fprintf(f, ANSI_BOLD ANSI_RED "dealer:" ANSI_RESET " ");
+        print_hand(f, dh, dc, 0);
         fprintf(f, " (total: %d)\n", dealer_total);
 
         // outcome
