@@ -58,13 +58,11 @@ int main(int argc, char *argv[]) {
     while (fgets(buf, sizeof(buf), f)) {
         printf("%s", buf);
 
-        // Check if input is required from user
         if (strchr(buf, '?') || 
             (strchr(buf, ':') && !strstr(buf, "welcome") && !strstr(buf, "total") &&
              !strstr(buf, "your:") && !strstr(buf, "dealer:"))) {
 
             if (strstr(buf, "pass")) {
-                // Read password and hash it before sending
                 char input[256];
                 if (!fgets(input, sizeof(input), stdin)) break;
                 input[strcspn(input, "\n")] = '\0';
@@ -73,15 +71,12 @@ int main(int argc, char *argv[]) {
                 hash_password(input, hash);
                 fprintf(f, "%s\n", hash);
             } else {
-                // Normal input (user, bet, h/s, y/n)
                 if (!fgets(buf, sizeof(buf), stdin)) break;
                 fprintf(f, "%s", buf);
             }
-
             fflush(f);
         }
     }
-
     fclose(f);
     return 0;
 }
