@@ -9,6 +9,7 @@
 #include <signal.h>
 #include <time.h>
 #include <string.h>
+#include <fcntl.h> 
 
 #define ANSI_BOLD     "\033[1m"
 #define ANSI_RED      "\033[31m"
@@ -63,48 +64,111 @@ void card_str(int c, char *buf) {
     sprintf(buf, "%s%s", ranks[c % 13], suits[c / 13]);
 }
 
+
+int set_read_lock(FILE *file) {
+    struct flock lock;
+    lock.l_type = F_RDLCK;
+    lock.l_whence = SEEK_SET;
+    lock.l_start = 0;
+    lock.l_len = 0;
+    lock.l_pid = getpid();
+    int fd = fileno(file);
+    return fcntl(fd, F_SETLKW, &lock) != -1;
+}
+
+
+int set_write_lock(FILE *file) {
+    struct flock lock;
+    lock.l_type = F_WRLCK;
+    lock.l_whence = SEEK_SET;
+    lock.l_start = 0;
+    lock.l_len = 0;
+    lock.l_pid = getpid();
+    int fd = fileno(file);
+    return fcntl(fd, F_SETLKW, &lock) != -1;
+}
+
+
+int release_lock(FILE *file) {
+    struct flock lock;
+    lock.l_type = F_UNLCK;
+    lock.l_whence = SEEK_SET;
+    lock.l_start = 0;
+    lock.l_len = 0;
+    lock.l_pid = getpid();
+    int fd = fileno(file);
+    return fcntl(fd, F_SETLK, &lock) != -1;
+}
+
 int load_user(const char *u, const char *p, user_t *out) {
     FILE *f = fopen("users.txt", "r");
     if (!f) return 0;
-
+    if (!set_read_lock(f)) {
+        fclose(f);
+        return 0;
+    }
     user_t tmp;
+    int found = 0;
     while (fscanf(f, "%31s %64s %d %d", tmp.user, tmp.pass, &tmp.tokens, &tmp.score) == 4) {
         if (strcmp(tmp.user, u) == 0 && strcmp(tmp.pass, p) == 0) {
             *out = tmp;
-            fclose(f);
-            return 1;
+            found = 1;
+            break;
         }
     }
-
+    release_lock(f);
     fclose(f);
-    return 0;
+    return found;
 }
 
 int save_user(const user_t *u) {
     FILE *in = fopen("users.txt", "r");
-    FILE *out = fopen("users.tmp", "w");
-    int found = 0;
-
-    if (in) {
-        user_t tmp;
-        while (fscanf(in, "%31s %64s %d %d", tmp.user, tmp.pass, &tmp.tokens, &tmp.score) == 4) {
-            if (strcmp(tmp.user, u->user) == 0) {
-                fprintf(out, "%s %s %d %d\n", u->user, u->pass, u->tokens, u->score);
-                found = 1;
-            } else {
-                fprintf(out, "%s %s %d %d\n", tmp.user, tmp.pass, tmp.tokens, tmp.score);
-            }
+    if (!in) {
+        FILE *out = fopen("users.txt", "w");
+        if (!out) return 0;
+        if (!set_write_lock(out)) {
+            fclose(out);
+            return 0;
         }
-        fclose(in);
+        fprintf(out, "%s %s %d %d\n", u->user, u->pass, u->tokens, u->score);
+        release_lock(out);
+        fclose(out);
+        return 1;
     }
-
+    if (!set_read_lock(in)) {
+        fclose(in);
+        return 0;
+    }
+    FILE *out = fopen("users.tmp", "w");
+    if (!out) {
+        release_lock(in);
+        fclose(in);
+        return 0;
+    }
+    if (!set_write_lock(out)) {
+        release_lock(in);
+        fclose(in);
+        fclose(out);
+        return 0;
+    }
+    int found = 0;
+    user_t tmp;
+    while (fscanf(in, "%31s %64s %d %d", tmp.user, tmp.pass, &tmp.tokens, &tmp.score) == 4) {
+        if (strcmp(tmp.user, u->user) == 0) {
+            fprintf(out, "%s %s %d %d\n", u->user, u->pass, u->tokens, u->score);
+            found = 1;
+        } else {
+            fprintf(out, "%s %s %d %d\n", tmp.user, tmp.pass, tmp.tokens, tmp.score);
+        }
+    }
     if (!found) {
         fprintf(out, "%s %s %d %d\n", u->user, u->pass, u->tokens, u->score);
     }
-
+    release_lock(in);
+    release_lock(out);
+    fclose(in);
     fclose(out);
-    rename("users.tmp", "users.txt");
-    return 1;
+    return rename("users.tmp", "users.txt") == 0;
 }
 
 void print_hand(FILE *f, int *hand, int count, int hide_last) {

@@ -13,6 +13,7 @@ Sieciowa implementacja gry Blackjack w architekturze klient-serwer napisana w j�
 ### Bezpieczeństwo
 - **SHA-256** - hashowanie haseł użytkowników (biblioteka OpenSSL)
 - **Przechowywanie**: hashe zapisywane w pliku `users.txt`
+- **Blokady pliku**: serwer stosuje blokady pliku (`fcntl`) podczas odczytu i zapisu `users.txt`, aby uniemożliwić jednoczesny dostęp wielu procesów i zapobiec kolizjom danych
 
 ### Architektura serwera
 - **Fork-based** - każdy klient obsługiwany w osobnym procesie
